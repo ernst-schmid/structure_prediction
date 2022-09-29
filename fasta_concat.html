@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]>      <html class="no-js"> <!--<![endif]-->
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>FASTA CONCAT</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="">
+    </head>
+    <body>
+        <input id ="input_file" type="file">
+
+        <p>
+        <input type="radio" id="combine_all" name="mode" value="combine_all">
+         <label for="combine_all">combine all</label><br>
+        <input type="radio" id="single_files" name="mode" value="single_files">
+         <label for="single_files">single files</label><br>
+         <input type="radio" id="all_2mers" name="mode" value="all_2mers">
+         <label for="all_2mers">all against all</label><br>
+         <input type="radio" id="all_against_1" name="mode" value="all_against_1">
+         <label for="all_against_1">all against 1</label> 
+         <select id="selected_protein"></select> 
+         <div style="padding-left:20px">
+            <div><label>colon (colabfold)</label><input type="radio" id="colon" name="2mer_opt" value="colon"></div>
+            <div><label>fasta (openfold)</label><input type="radio" id="fasta" name="2mer_opt" value="fasta"></div>
+         </div>
+        </p>
+        <p>
+
+            <button id="download">download</button>
+        </p>
+
+        <script src="https://code.jquery.com/jquery-3.6.1.slim.min.js" integrity="sha256-w8CvhFs7iHNVUtnSP0YKEg00p9Ih13rlL9zGqvLdePA=" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script>
+
+            var tsv_text = null;
+            var proteins = [];
+            $("#input_file").on("change", function(){
+
+                var file = $(this)[0].files[0];
+                var reader = new FileReader();
+                reader.onload= function(evt){
+                    
+                    var txt = evt.target.result;
+                    tsv_text = txt;
+                    proteins = get_proteins(tsv_text);
+                    var names = [];
+                    for(var p of proteins) names.push(p.name)
+                    names.sort();
+                    for(var n of names) $("#selected_protein").append(`<option>${n}</option>`);
+                    console.log(proteins);
+                }
+                reader.readAsText(file, "UTF-8");
+            });
+
+
+            $("#download").on("click", function(){
+
+                if(proteins.length > 0) process_proteins(proteins);
+            })
+
+            function get_proteins(tsv_text){
+
+                var lines = tsv_text.split("\n");
+                var headers = lines[0].split("\t");
+                var seq_column = headers.findIndex(function(el){
+                    return el.toLowerCase().trim().indexOf("sequence") > -1;
+                })
+                var entry_col = headers.findIndex(function(el){
+                    return el.toLowerCase().trim().indexOf("entry name") > -1;
+                })
+                var ps = [];
+                for(var i = 1; i < lines.length; i++){
+
+                    var fields = lines[i].split("\t");
+                    if(fields[entry_col].trim().length == 0) continue;
+                    ps.push({
+                        "name":fields[entry_col],
+                        "seq":fields[seq_column].replace(/\s/g,''),
+                    })
+                }
+
+                return ps;
+            }
+
+            function process_proteins(prots){
+
+                var fasta_files = [];
+
+                if($("#combine_all").is(":checked")){
+
+                    var txt = '';
+                    for(var p of prots){
+
+                        txt += ">" + p.name + "\n";
+                        txt += p.seq.match(/.{1,80}/g).join("\n"); 
+                        txt += "\n";
+                    }
+
+                    var fasta_blob = new Blob([txt], {
+                        type: 'text/plain'
+                    });
+
+                    download(fasta_blob, "combined_fastas.fasta");           
+                }
+                else if($("#single_files").is(":checked")){
+
+                    for(var p of prots){
+
+                        var txt = ">" + p.name + "\n";
+                        txt += p.seq.match(/.{1,80}/g).join("\n"); 
+                        fasta_files.push({
+                            "name":p.name,
+                            "txt":txt
+                        })
+                    }
+                }
+                else if($("#all_2mers").is(":checked")){
+
+                    for(var i = 0; i < prots.length - 1; i++){
+
+                        var prot1 = prots[i];
+
+                        for(var i2 = i; i2 < prots.length; i2++){
+
+                            var prot2 = prots[i2];
+                            var length = prot1.seq.length + prot2.seq.length;
+                            var txt = ''
+
+                            if($("#fasta").is(":checked")){
+
+                                txt += ">" + prot1.name + "\n";
+                                txt += prot1.seq.match(/.{1,80}/g).join("\n"); 
+                                txt += "\n";
+                                txt += ">" + prot2.name + "\n";
+                                txt += prot2.seq.match(/.{1,80}/g).join("\n"); 
+                            }
+                            else{
+
+                                txt += ">" + prot1.name + "__" + prot2.name + "\n";
+                                txt += prot1.seq + ":" + prot2.seq;
+                            }
+
+                            fasta_files.push({
+                                "name":prot1.name + "__" + prot2.name + "__" + length + "aa",
+                                "txt":txt
+                            })
+                        }                    
+                        }
+                }
+                else if($("#all_against_1").is(":checked")){
+
+                    var selected_protein_name = $("#selected_protein").find(":selected").text();
+                    var selected_protein = null;
+                    for(var i = 0; i < prots.length; i++){
+
+                        if(prots[i].name == selected_protein_name){
+
+                            selected_protein = prots[i];
+                            break;
+                        }
+                    }
+
+                    for(var i = 0; i < prots.length; i++){
+
+                        var prot = prots[i];
+                        var length = selected_protein.seq.length + prot.seq.length;
+                        var txt = ''
+
+                        if($("#fasta").is(":checked")){
+
+                            txt += ">" + selected_protein.name + "\n";
+                            txt += selected_protein.seq.match(/.{1,80}/g).join("\n"); 
+                            txt += "\n";
+                            txt += ">" + prot.name + "\n";
+                            txt += prot.seq.match(/.{1,80}/g).join("\n"); 
+                        }
+                        else{
+
+                            txt += ">" + selected_protein.name + "__" + prot.name + "\n";
+                            txt += selected_protein.seq + ":" + prot.seq;
+                        }
+
+                        fasta_files.push({
+                            "name":selected_protein.name + "__" + prot.name + "__" + length + "aa",
+                            "txt":txt
+                        })                
+                    }
+                }
+
+                if(fasta_files.length > 1){
+
+                    var zip = new JSZip();
+                    for(var f of fasta_files)  zip.file(`combined_fastas/${f.name}.fasta`, f.txt);
+                    zip.generateAsync({type:"blob"}).then(function (blob) { // 1) generate the zip file
+                        download(blob, "combined_fastas.zip");                          // 2) trigger the download
+                    }, function (err) {});
+                }
+            }
+
+            function download(file, filename) {
+                if (window.navigator.msSaveOrOpenBlob) // IE10+
+                    window.navigator.msSaveOrOpenBlob(file, filename);
+                else { // Others
+                    var a = document.createElement("a"), url = URL.createObjectURL(file);
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(function() {
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);  
+                    }, 0); 
+                }
+            }
+        </script>
+    </body>
+</html>

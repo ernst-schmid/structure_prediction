@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]>      <html class="no-js"> <!--<![endif]-->
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title></title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="">
+        <style>
+
+            *{
+
+                font-family: Arial, Helvetica, sans-serif;
+            }
+            input[type="number"]{
+
+                width: 4em;
+            }
+        </style>
+    </head>
+    <body>
+
+        <label>TSV file of proteins</label> <input id="input_file" type="file"><br>
+
+        <p>
+            <label>protein 1</label><select id="p1"></select> <input id="split1" type="checkbox"> 
+            <span style="display:inline-block;width:4em"></span>
+            <label>protein 2</label><select id="p2"></select><input id="split2" type="checkbox">
+        </p>
+
+        <p>
+            <label>window size</label><input id = "window_size" type="number" value="400" min="100">
+            <span style="display:inline-block;width:4em"></span>
+            <label>stride size</label><input id = "stride_size" type="number" value="200" min="50">
+        </p>
+        <p>
+            <button id="download">download</button>
+        </p>
+
+        <script src="https://code.jquery.com/jquery-3.6.1.slim.min.js" integrity="sha256-w8CvhFs7iHNVUtnSP0YKEg00p9Ih13rlL9zGqvLdePA=" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script>
+            
+            var tsv_text = null;
+            var proteins = [];
+            $("#input_file").on("change", function(){
+
+                var file = $(this)[0].files[0];
+                var reader = new FileReader();
+                reader.onload= function(evt){
+                    
+                    var txt = evt.target.result;
+                    tsv_text = txt;
+                    proteins = get_proteins(tsv_text);
+                    var names = [];
+                    for(var p of proteins) names.push(p.name)
+
+                    names.sort();
+                    for(var n of names) {
+                        $("#p1").append(`<option>${n}</option>`)
+                        $("#p2").append(`<option>${n}</option>`)
+                    }
+                }
+                reader.readAsText(file, "UTF-8");
+            });
+
+            function get_proteins(tsv_text){
+
+                var lines = tsv_text.split("\n");
+                var headers = lines[0].split("\t");
+                var seq_column = headers.findIndex(function(el){
+                    return el.toLowerCase().trim().indexOf("sequence") > -1;
+                })
+                var entry_col = headers.findIndex(function(el){
+                    return el.toLowerCase().trim().indexOf("entry name") > -1;
+                })
+                var ps = [];
+                for(var i = 1; i < lines.length; i++){
+
+                    var fields = lines[i].split("\t");
+                    ps.push({
+                        "name":fields[entry_col],
+                        "seq":fields[seq_column].replace(/\s/g,''),
+                    })
+                }
+                return ps;
+            }
+
+            $("#download").on("click", function(){
+
+                if(proteins.length > 0) process_proteins(proteins);
+            })
+
+            function process_proteins(proteins){
+
+                var p1_name = $("#p1").find(":selected").text();
+                var p2_name = $("#p2").find(":selected").text();
+                var prot1 = null, prot2 = null;
+
+                for(var p of proteins){
+
+                    if(p.name == p1_name) prot1 = p;
+                    if(p.name == p2_name) prot2 = p;
+                }
+
+                var pieces = [];
+                var window_size = parseInt($("#window_size").val());
+                var stride = parseInt($("#stride_size").val());
+                var fasta_files = [];
+
+                var pieces1 = [], pieces2 = [];
+                if($("#split1").is(":checked")){
+
+                    pieces1 = get_pieces(prot1, window_size, stride)
+                }
+                else{
+
+                    pieces1 = [prot1];
+                }
+                if($("#split2").is(":checked")){
+
+                    pieces2 = get_pieces(prot2, window_size, stride)
+                }
+                else{
+
+                    pieces2 = [prot2];
+                }
+
+                console.log(pieces1);
+                console.log(pieces2);
+
+                for(var p1 of pieces1){
+
+                    for(var p2 of pieces2){
+                       
+                        var txt = '';
+                        txt += ">" + p1.name + "__" + p2.name + "\n";
+                        txt += p1.seq + ":" + p2.seq;
+                        fasta_files.push({
+                            "name":p1.name + "__" + p2.name,
+                            "txt":txt
+                        })      
+                    }    
+                }
+
+                if(fasta_files.length > 1){
+
+                    var zip = new JSZip();
+                    for(var f of fasta_files)  zip.file(`windowed_fastas/${f.name}.fasta`, f.txt);
+                    zip.generateAsync({type:"blob"}).then(function (blob) { // 1) generate the zip file
+                        download(blob, "windowed_fastas.zip");                          // 2) trigger the download
+                    }, function (err) {});
+                }
+            }
+
+            function get_pieces(protein, window, stride){
+
+                var sequence = protein.seq;
+                var pieces = [];
+                var x = 0;
+
+                while(x < sequence.length){
+
+                    pieces.push({
+                        "name":protein.name + "[" + (x + 1) + "-" + Math.min(x + window, sequence.length) + "]",
+                        "seq":sequence.substr(x, window)
+                    })
+                    
+                    if(x + window > sequence.length) break;
+                    
+                    x += stride;
+                }
+
+                return pieces;
+            }
+
+            function download(file, filename) {
+                if (window.navigator.msSaveOrOpenBlob) // IE10+
+                    window.navigator.msSaveOrOpenBlob(file, filename);
+                else { // Others
+                    var a = document.createElement("a"), url = URL.createObjectURL(file);
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(function() {
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);  
+                    }, 0); 
+                }
+            }
+
+        </script>
+    </body>
+</html>

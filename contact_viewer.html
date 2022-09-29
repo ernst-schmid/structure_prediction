@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>Contact Viewer</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="">
+        <style>
+
+            *{
+
+                font-family: Arial, Helvetica, sans-serif;
+                color:rgb(78, 78, 78);
+            }
+
+            #diagram{
+
+                padding: 30px;
+                position: fixed;
+                top:50%;
+                left:50%;
+                width: 80%;
+                transform: translate(-50%, -50%);
+            }
+
+            .indicator{
+
+                border-bottom: 1px solid rgb(234, 234, 234);
+            }
+
+            .indicator label{
+
+                width:180px;
+                margin-right: 20px;
+                text-align: right;
+                display: inline-block;
+            }
+
+            .indicator > div{
+
+                position: relative;
+                height: 10px;
+                width:calc(100% - 210px);
+                display: inline-block;
+            }
+
+            .tick{
+
+                position: absolute;
+                top:0;
+                height: 100%;
+                width:3px;
+                background: blue;
+            }
+
+            .mainline{
+
+                background: rgb(207, 207, 207);
+            }
+
+        </style>
+    </head>
+    <body>
+        <label>protein length</label><input type="number" id="protein_length" min="100" value="1000">
+        <input type="file" id = "contact_file">
+
+        <div id = "diagram">
+
+
+
+        </div>
+        <script src="https://code.jquery.com/jquery-3.6.1.slim.min.js" integrity="sha256-w8CvhFs7iHNVUtnSP0YKEg00p9Ih13rlL9zGqvLdePA=" crossorigin="anonymous"></script>
+        <script>
+
+            var colors = ["#de6b48","#e5b181","#f4b9b2","#daedbd","#7dbbc3", "#de6b48","#e5b181","#f4b9b2","#daedbd","#7dbbc3"]
+            var cindex = 0;
+            function get_next_color(){
+
+                cindex++;
+                if (cindex >= colors.length) cindex = 0;
+                return colors[cindex];
+            }
+
+            var contacts = null;
+            $("#contact_file").on("change", function(){
+
+                var file = $(this)[0].files[0];
+                var reader = new FileReader();
+                reader.onload= function(evt){
+                    
+                    var txt = evt.target.result;
+                    parse_contacts(txt);
+                }
+                reader.readAsText(file, "UTF-8");
+            });
+
+            function contact_from_line(line){
+
+                var fields = line.split("\t");
+                var complex = fields[0];
+                var partner = complex.match(/__.*__/g)[0];
+
+                console.log(partner)
+                partner = partner.replaceAll('__', '');
+                
+                return {
+
+                    'complex':fields[0],
+                    'partner':partner,
+                    'aa1':fields[1],
+                    'aa1_index': parseInt(fields[2]),
+                    'aa2':fields[5],
+                    'aa2_index': parseInt(fields[6])
+                }
+            }
+
+            function parse_contacts(tsv){
+
+                var lines = tsv.split("\n");
+                var header = lines[0]
+
+                var contacts = []
+                for(var r = 1, n = lines.length; r < n; r++){
+
+                    if(lines[r].trim().length < 1) continue;
+                    contacts.push(contact_from_line(lines[r]));
+                }
+                
+                var partners = {};
+                for(var c of contacts){
+
+                    if(partners[c.partner]) partners[c.partner]['contacts'].push(c)
+                    else{
+                        partners[c.partner] = {'name':c.partner, 'contacts': [c]}
+                    } 
+                }
+
+                var partners_array = [];
+                for(name in partners){
+
+                    var contacts = partners[name].contacts;
+                    for(var i = contacts.length - 1; i >= 0; i--){
+
+                        var contact = contacts[i];
+                        inner:
+                        for(var i2 = i - 1; i2 >= 0; i2--){
+
+                            if(contacts[i2].aa1_index == contact.aa1_index){
+
+                                contacts.splice(i, 1);
+                                break inner;
+                            }
+                        }
+                    }
+
+                    partners_array.push(partners[name])
+                }
+
+                partners_array.sort(function(a, b){
+                    return a.contacts.length - b.contacts.length
+                })
+
+                var p_length = parseInt($('#protein_length').val());
+                for(var i = 0; i < partners_array.length; i++){
+
+                    var partner = partners_array[i];
+                    var active_color = get_next_color()
+                    var indicator = $(`<div class ="indicator"><label>${partner.name}</label><div class = "line"></div></div>`)
+                    var line = indicator.find('.line')
+                    var contacts = partner.contacts;
+                    console.log(contacts);
+                    for(var c of contacts){
+
+
+                        var tick = $(`<div class="tick"></div>`);
+                        tick.css("left", (100*c.aa1_index/p_length) + '%');
+                        tick.css("background", active_color);
+                        line.append(tick)
+                    }
+
+                    $('#diagram').append(indicator)
+                }
+
+                $('#diagram').append($(`<div class ="indicator"><label>PROTEIN</label><div class = "line mainline"></div></div>`))
+            }
+
+            function process_data_for_complex(){
+
+
+            }
+
+        </script>
+    </body>
+</html>
