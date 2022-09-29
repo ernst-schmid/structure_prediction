@@ -1,8 +1,4 @@
 <!DOCTYPE html>
-<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
-<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
-<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
-<!--[if gt IE 8]>      <html class="no-js"> <!--<![endif]-->
 <html>
     <head>
         <meta charset="utf-8">
@@ -92,6 +88,7 @@
             function process_proteins(prots){
 
                 var fasta_files = [];
+                var use_fasta_format = $("#fasta").is(":checked");
 
                 if($("#combine_all").is(":checked")){
 
@@ -133,7 +130,7 @@
                             var length = prot1.seq.length + prot2.seq.length;
                             var txt = ''
 
-                            if($("#fasta").is(":checked")){
+                            if(use_fasta_format){
 
                                 txt += ">" + prot1.name + "\n";
                                 txt += prot1.seq.match(/.{1,80}/g).join("\n"); 
@@ -173,7 +170,7 @@
                         var length = selected_protein.seq.length + prot.seq.length;
                         var txt = ''
 
-                        if($("#fasta").is(":checked")){
+                        if(use_fasta_format){
 
                             txt += ">" + selected_protein.name + "\n";
                             txt += selected_protein.seq.match(/.{1,80}/g).join("\n"); 
