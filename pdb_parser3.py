@@ -8,9 +8,9 @@ def dist2(v1, v2):
 
 def atom_from_line(atom_line):
 
-    index = atom_line[23:27].strip()
-    coordinates = [float(i) for i in re.findall(r"[-+]?(?:\d*\.\d+|\d+)", atom_line[29:54])]
-
+    index = atom_line[22:27].strip()
+    coordinates = np.array([float(atom_line[30:38]), float(atom_line[38:46]), float(atom_line[46:54])])
+    # coordinates = [float(i) for i in re.findall(r"[-+]?(?:\d*\.\d+|\d+)", atom_line[29:54])]
     return {"type":atom_line[13:16].strip(), "aa_index":index, "xyz":coordinates,}
 
 def get_closest_atoms(res1, res2):
@@ -75,7 +75,7 @@ def get_contacts(pdb_filename, a_distance):
 
                 chain = atom_line[20:22].strip()
                 res_num += 1
-                residues[chain + atom['aa_index']] = {"atoms":[], "index":res_num, "type": atom_line[17:20]}
+                residues[chain + atom['aa_index']] = {"atoms":[], "index":res_num, "type": atom_line[17:20], "bfactor": float(atom_line[60:66])}
 
                 if chain != last_chain:
                     chainnames.append(chain)
@@ -87,7 +87,7 @@ def get_contacts(pdb_filename, a_distance):
             
             residues[chain + atom['aa_index']]['atoms'].append(atom)
 
-    num_chains = chain_index  
+    num_chains = chain_index  + 1
 
     for i in range(0, num_chains):
         coordinates[i] = np.array(coordinates[i])
@@ -101,36 +101,21 @@ def get_contacts(pdb_filename, a_distance):
 
             chain2name = chainnames[i2]
             c2_coords = coordinates[i2]
-
             for aa1_index in range(0, len(c1_coords)):
 
                 r1 = residues[chain1name + str(aa1_index + 1)]
                 d2s = ((np.tile(c1_coords[aa1_index], (len(c2_coords), 1)) - c2_coords)**2).sum(axis=1)
+
                 aa2_indices = np.where(d2s < threshold)[0]
                 for aa2_index in aa2_indices:
 
                     r2 = residues[chain2name + str(aa2_index + 1)]
-                    min_d2, atoms = get_closest_atoms2(r1, r2)
+                    min_d2, atoms = get_closest_atoms(r1, r2)
                     if(min_d2 < a_distance2):
                         contacts.append({
                             'distance': round(math.sqrt(min_d2), 1),
-                            "aa1":{"chain":chain1name, "type":r1["type"], "index":aa1_index, "abs_index":r1['index'], "atom":atoms[0]['type']},
-                            "aa2":{"chain":chain2name, "type":r2["type"], "index":aa2_index, "abs_index":r2['index'], "atom":atoms[1]['type']}
+                            "aa1":{"chain":chain1name, "type":r1["type"], "index":aa1_index, "abs_index":r1['index'], "atom":atoms[0]['type'], "plddt": r1["bfactor"]},
+                            "aa2":{"chain":chain2name, "type":r2["type"], "index":aa2_index, "abs_index":r2['index'], "atom":atoms[1]['type'], "plddt": r2["bfactor"]}
                         })
 
     return contacts
-
-
-parser = ArgumentParser()
-parser.add_argument(
-    "input",
-    default="struct_path",
-    help="PDB file of structure",
-)
-args = parser.parse_args()
-startTime = time.time()
-get_contacts(args.input, 10)
-# print(get_contacts(args.input, 3))
-executionTime = (time.time() - startTime)
-print('Execution time in seconds: ' + str(executionTime))
-
