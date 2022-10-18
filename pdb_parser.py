@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import sys, re, math
-
+from argparse import ArgumentParser
+import time 
 
 def dist2(v1, v2):
     return (v1[0] - v2[0])**2 + (v1[1] - v2[1])**2 + (v1[2] - v2[2])**2
@@ -32,7 +33,7 @@ def get_closest_atoms(res1, res2):
 def get_contacts(pdb_filename, a_distance):
 
     a_distance2 = a_distance**2;    
-    threshold = (a_distance + 15)**2
+    threshold = (a_distance + 30)**2
     
     contacts = []
     chains = {}
@@ -75,6 +76,7 @@ def get_contacts(pdb_filename, a_distance):
             chain2 = chains[chainnames[i2]]
 
             for ca1 in chain1:
+                
                 for ca2 in chain2:
                     d2 = dist2(ca1['coordinates'], ca2['coordinates'])
                     if(d2 < threshold):
@@ -86,10 +88,25 @@ def get_contacts(pdb_filename, a_distance):
                         min_distance = dist2(atoms[0]['coordinates'], atoms[1]['coordinates'])
                         if(min_distance < a_distance2):
                             contacts.append({
-                                "ca_distance":round(math.sqrt(d2), 1),
+                                "ca_distance": round(math.sqrt(d2), 1),
                                 'min_distance': round(math.sqrt(min_distance), 1),
                                 "aa1":{"chain":chainnames[i], "type":ca1["aa"], "index":ca1["aa_index"],  "abs_index":ca1["absolute_aa_index"], "atom":atoms[0]['type']},
                                 "aa2":{"chain":chainnames[i2], "type":ca2["aa"], "index":ca2["aa_index"], "abs_index":ca2["absolute_aa_index"], "atom":atoms[1]['type']}
                             })
     
     return contacts
+
+
+
+parser = ArgumentParser()
+parser.add_argument(
+    "input",
+    default="struct_path",
+    help="PDB file of structure",
+)
+args = parser.parse_args()
+startTime = time.time()
+get_contacts(args.input, 10)
+# print(get_contacts(args.input, 3))
+executionTime = (time.time() - startTime)
+print('Execution time in seconds: ' + str(executionTime))

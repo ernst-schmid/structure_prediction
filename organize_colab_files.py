@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 import os
 import shutil
+import re
 
 def get_all_files_for_complex(path, complex_name, filetype = ''):
 
@@ -23,6 +24,7 @@ def process_folder(folder_path):
 
     for complex_name in complex_names:
 
+        complex_name = re.sub(r"_\d+aa", "", complex_name).rstrip("_ -")
         complex_directory = os.path.join(output_dir, complex_name)
         if not os.path.exists(complex_directory):
             os.mkdir(complex_directory)
@@ -31,11 +33,13 @@ def process_folder(folder_path):
         for pdb_filename in pdb_filenames:
 
             new_file_name = pdb_filename.replace("HUMAN", "H").replace("unrelaxed", "ur").replace("rank_", "r").replace("model_", "m")
+            new_file_name = re.sub(r"_\d+aa_", "", new_file_name) 
             shutil.copy(os.path.join(folder_path, pdb_filename), os.path.join(complex_directory, new_file_name))
 
         img_filenames = get_all_files_for_complex(folder_path, complex_name, '.png')
         for img_filename in img_filenames: 
             new_img_filename = img_filename.replace("HUMAN", "H")
+            new_img_filename = re.sub(r"_\d+aa_", "", new_img_filename) 
             shutil.copy(os.path.join(folder_path, img_filename), os.path.join(complex_directory, new_img_filename))
 
 

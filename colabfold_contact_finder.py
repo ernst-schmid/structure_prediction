@@ -172,7 +172,7 @@ def process_folder(path, angstrom_cutoff = 10, pae_cutoff = 14, plddt_cutoff = 7
 
     if len(summary_output_data) > 1:
         summary_output = open(output_filename + "_summary.tsv", "w")
-        summary_output.write('name\tnum_aas_in_contacts\tmean_plddt\tpdoq\tmulti_aa_interfaces\n')
+        summary_output.write('name\tnum_aas_in_contacts\tmean_plddt\tpdockq\tmulti_aa_interfaces\n')
         for d in summary_output_data:
 
             interface_str = ''
